@@ -111,7 +111,8 @@ for epoch in range(start_epoch, cfg["epochs"]):
             assert math.isfinite(lv) and math.isfinite(gn.item()), f"non-finite at step {step}"
             dt = (time.time() - t_prev) / cfg["log_every"]
             t_prev = time.time()
-            ep_loss += lv; ep_n += 1
+            ep_loss += lv
+            ep_n += 1
             print(f"ep {epoch} step {step}/{total_steps} loss {lv:.4f} cls {l_cls.item():.4f} patch {l_patch.item():.4f} "
                   f"lr {lr_at(step):.2e} gn {gn.item():.2f} {2 * bs / dt:.0f} img/s wait {wait:.3f}", flush=True)
             if G:
