@@ -1,7 +1,7 @@
 data_glob: /home/dev/data/images/*.tar
 batch_size: 256          # images per step -> 512 views (2 global views each)
 num_workers: 24
-epochs: 30
+epochs: 40               # ~1.2M images x 40 = ~48M exposures, ~4h at ~3.3k img/s
 warmup_epochs: 5
 lr: 1.0e-3
 weight_decay: 0.05
