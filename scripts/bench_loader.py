@@ -5,7 +5,7 @@ import time
 sys.path.insert(0, "/home/dev/repo/src")
 from dataset import make_loader
 
-dl = make_loader("/home/dev/data/images/*.tar")
+dl = make_loader("/home/dev/data/images/*.tar", num_workers=24)
 it = iter(dl)
 for _ in range(5):  # warmup
     next(it)

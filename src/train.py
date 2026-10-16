@@ -11,7 +11,7 @@ import torch
 import yaml
 
 sys.path.insert(0, os.path.dirname(__file__))
-from dataset import make_loader
+from dataset import make_loader, normalize
 from losses import distill_loss
 from models import Student, make_teacher, teacher_features
 
@@ -93,7 +93,7 @@ for epoch in range(start_epoch, cfg["epochs"]):
             v1, v2 = next(it)
         except StopIteration:  # n_images estimate slightly above what loader yields
             break
-        x = torch.cat([v1, v2]).to(dev, non_blocking=True)
+        x = normalize(torch.cat([v1, v2]).to(dev, non_blocking=True))
         wait = time.time() - t0
         for g in opt.param_groups:
             g["lr"] = lr_at(step)
