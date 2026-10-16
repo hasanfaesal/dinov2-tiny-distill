@@ -79,6 +79,14 @@ except ImportError:
 
 loader = make_loader(cfg["data_glob"], bs, cfg["num_workers"])
 
+knn_every = cfg.get("knn_every", 0)
+if knn_every:
+    from evaluate_knn import knn_eval, load_cifar, student_fn, teacher_fn
+
+    cifar = load_cifar()
+    print(f"teacher knn top1 {knn_eval(teacher_fn(teacher), cifar, 196):.4f}", flush=True)
+    KNN = Gauge("knn_top1", "knn_top1") if G else None
+
 
 def save(path, epoch):
     torch.save({"student": student.state_dict(), "opt": opt.state_dict(), "step": step, "epoch": epoch, "best": best}, path)
@@ -120,6 +128,11 @@ for epoch in range(start_epoch, cfg["epochs"]):
                     G[k].set(v)
     avg = ep_loss / max(ep_n, 1)
     print(f"=== epoch {epoch} done avg_loss {avg:.4f}", flush=True)
+    if knn_every and (epoch + 1) % knn_every == 0:  # no dropout/BN in the student, so no eval() toggle
+        acc = knn_eval(student_fn(student), cifar, 224)
+        print(f"=== epoch {epoch} knn top1 {acc:.4f}", flush=True)
+        if KNN:
+            KNN.set(acc)
     if avg < best:
         best = avg
         save(os.path.join(cfg["ckpt_dir"], "best.pt"), epoch + 1)
