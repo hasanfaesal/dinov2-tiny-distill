@@ -10,7 +10,7 @@ it = iter(dl)
 for _ in range(5):  # warmup
     next(it)
 n, t = 0, time.time()
-for _ in range(40):
+for _ in range(400):  # >> 24 workers x prefetch 4 = 96 buffered batches
     v1, v2 = next(it)
     assert v1.shape == v2.shape == (256, 3, 224, 224), v1.shape
     n += v1.shape[0]
