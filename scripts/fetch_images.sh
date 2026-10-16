@@ -12,10 +12,12 @@ VENV=${VENV:-venv}
 source "$VENV/bin/activate"
 pip install -q img2dataset "huggingface_hub" pyarrow
 mkdir -p "meta_$TAG" "$OUT" logs
-INC=(); for i in $(seq "$START" $((START + N - 1))); do INC+=(--include "$(printf '%08d.tar' "$i")"); done
-HF_XET_HIGH_PERFORMANCE=1 hf download mlfoundations/DataComp-12M --repo-type dataset --local-dir "meta_$TAG" "${INC[@]}"
-python repo/scripts/build_urls.py "meta_$TAG" "urls_$TAG.parquet"
-rm -f "meta_$TAG"/*.tar  # urls extracted; metadata tars no longer needed
+if [ ! -f "urls_$TAG.parquet" ]; then  # rerun = resume: img2dataset skips finished shards (incremental mode)
+  INC=(); for i in $(seq "$START" $((START + N - 1))); do INC+=(--include "$(printf '%08d.tar' "$i")"); done
+  HF_XET_HIGH_PERFORMANCE=1 hf download mlfoundations/DataComp-12M --repo-type dataset --local-dir "meta_$TAG" "${INC[@]}"
+  python repo/scripts/build_urls.py "meta_$TAG" "urls_$TAG.tmp.parquet" && mv "urls_$TAG.tmp.parquet" "urls_$TAG.parquet"
+  rm -f "meta_$TAG"/*.tar  # urls extracted; metadata tars no longer needed
+fi
 img2dataset --url_list "urls_$TAG.parquet" --input_format parquet --url_col url --caption_col uid \
   --output_format webdataset --output_folder "$OUT" --image_size 256 --resize_mode keep_ratio \
   --encode_quality 90 --processes_count "${PROCS:-8}" --thread_count 128 --number_sample_per_shard 10000 \
