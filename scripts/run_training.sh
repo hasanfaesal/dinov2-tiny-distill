@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Detached launcher. Run on the node from /home/dev/src (so `dataset` etc. import).
-# Resumes automatically from /home/dev/checkpoints/last.pt. Pass --smoke N for a short test.
-set -euo pipefail
-mkdir -p /home/dev/logs /home/dev/checkpoints
-cd /home/dev
-nohup python src/train.py configs/distill_config.yaml "$@" >> /home/dev/logs/train.log 2>&1 &
-echo "pid $! ; tail -f /home/dev/logs/train.log"
+# Detached training launcher (run on H100 node). Resumes from last.pt automatically.
+cd /home/dev/repo && git pull -q
+source /home/dev/venv/bin/activate
+pip install -q prometheus_client
+mkdir -p /home/dev/logs
+nohup python src/train.py >> /home/dev/logs/train.log 2>&1 &
+echo "launched pid $!"
