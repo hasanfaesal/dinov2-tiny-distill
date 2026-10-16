@@ -1,0 +1,14 @@
+shards: /home/dev/data/datacomp/*.tar
+ckpt_dir: /home/dev/checkpoints
+batch_size: 256          # image pairs -> 512 student images/step
+num_workers: 8
+lr: 1.0e-3
+weight_decay: 0.05
+warmup_epochs: 5
+epochs: 30
+steps_per_epoch: 5850    # ~1.5M images / 256; WebDataset has no len
+patch_w: 1.0
+grad_clip: 3.0
+ckpt_every_epochs: 5
+metrics_port: 9100
+log_every: 50
