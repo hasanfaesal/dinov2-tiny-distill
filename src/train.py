@@ -114,9 +114,9 @@ for epoch in range(start_epoch, cfg["epochs"]):
             ep_loss += lv
             ep_n += 1
             print(f"ep {epoch} step {step}/{total_steps} loss {lv:.4f} cls {l_cls.item():.4f} patch {l_patch.item():.4f} "
-                  f"lr {lr_at(step):.2e} gn {gn.item():.2f} {2 * bs / dt:.0f} img/s wait {wait:.3f}", flush=True)
+                  f"lr {lr_at(step):.2e} gn {gn.item():.2f} {bs / dt:.0f} img/s ({2 * bs / dt:.0f} views/s) wait {wait:.3f}", flush=True)
             if G:
-                for k, v in zip(G, [lv, l_cls.item(), l_patch.item(), lr_at(step), gn.item(), 2 * bs / dt, dt, wait]):
+                for k, v in zip(G, [lv, l_cls.item(), l_patch.item(), lr_at(step), gn.item(), bs / dt, dt, wait]):
                     G[k].set(v)
     avg = ep_loss / max(ep_n, 1)
     print(f"=== epoch {epoch} done avg_loss {avg:.4f}", flush=True)
