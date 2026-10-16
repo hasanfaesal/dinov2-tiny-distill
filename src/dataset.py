@@ -43,7 +43,7 @@ def make_loader(shard_glob, batch_size=256, num_workers=8, shuffle_buf=2000):
         return v1(img), v2(img)
 
     ds = (
-        wds.WebDataset(shards, shardshuffle=100, handler=wds.warn_and_continue)
+        wds.WebDataset(shards, shardshuffle=100, handler=wds.warn_and_continue, empty_check=False)
         .shuffle(shuffle_buf)
         .decode("pil", handler=wds.warn_and_continue)
         .map(views, handler=wds.warn_and_continue)

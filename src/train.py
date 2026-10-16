@@ -30,7 +30,7 @@ n_images = sum(
 bs = cfg["batch_size"]
 steps_per_epoch = n_images // bs
 if args.smoke:
-    cfg["data_glob"] = cfg["data_glob"].replace("*.tar", "0000[0-3].tar")
+    cfg["data_glob"] = cfg["data_glob"].replace("*.tar", "0000[0-7].tar")
     cfg["ckpt_dir"] += "_smoke"
     cfg["num_workers"] = 8
     cfg["log_every"] = 5
