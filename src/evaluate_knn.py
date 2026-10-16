@@ -1,21 +1,31 @@
 """k-NN (k=20, cosine, temperature-weighted vote) on CIFAR-100 from backbone CLS features.
 Usage: evaluate_knn.py CKPT [CKPT...]   |   evaluate_knn.py --teacher"""
+import io
 import os
 import sys
 
+import numpy as np
+import pyarrow.parquet as pq
 import torch
 import torch.nn.functional as F
-from torchvision.datasets import CIFAR100
+from PIL import Image
 
 sys.path.insert(0, os.path.dirname(__file__))
 from dataset import normalize
 
 
-def load_cifar(root="/home/dev/data/cifar100"):
-    def to_t(d):
-        return torch.from_numpy(d.data).permute(0, 3, 1, 2).contiguous(), torch.tensor(d.targets)
-
-    return to_t(CIFAR100(root, train=True, download=True)), to_t(CIFAR100(root, train=False, download=True))
+def load_cifar(root="/home/dev/data/cifar100_hf/cifar100"):
+    """HF mirror (uoft-cs/cifar100; the toronto host is ~100 KB/s from the node). Cached as uint8 tensors."""
+    cache = f"{root}/cifar100_uint8.pt"
+    if os.path.exists(cache):
+        return torch.load(cache)
+    out = []
+    for split in ("train", "test"):
+        t = pq.read_table(f"{root}/{split}-00000-of-00001.parquet").to_pydict()
+        x = np.stack([np.asarray(Image.open(io.BytesIO(d["bytes"])).convert("RGB")) for d in t["img"]])
+        out.append((torch.from_numpy(x).permute(0, 3, 1, 2).contiguous(), torch.tensor(t["fine_label"])))
+    torch.save(out, cache)
+    return out
 
 
 @torch.no_grad()
