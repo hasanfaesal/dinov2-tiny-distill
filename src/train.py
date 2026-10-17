@@ -20,6 +20,10 @@ ap.add_argument("--config", default=os.path.join(os.path.dirname(__file__), "../
 ap.add_argument("--smoke", action="store_true", help="short run on a few shards, own ckpt dir")
 args = ap.parse_args()
 cfg = yaml.safe_load(open(args.config))
+stop_patience = int(cfg.get("stop_patience", 0))  # 0 disables early stopping
+stop_min_epoch = int(cfg.get("stop_min_epoch", 0))
+stop_delta_knn = float(cfg.get("stop_delta_knn", 0.002))
+stop_delta_loss = float(cfg.get("stop_delta_loss", 0.002))
 
 shards = sorted(glob.glob(cfg["data_glob"]))
 n_images = sum(
@@ -62,18 +66,20 @@ def lr_at(step):
 os.makedirs(cfg["ckpt_dir"], exist_ok=True)
 last = os.path.join(cfg["ckpt_dir"], "last.pt")
 step, start_epoch, best = 0, 0, float("inf")
+best_knn, bad = 0.0, 0
 if os.path.exists(last):
     ck = torch.load(last, map_location=dev)
     student.load_state_dict(ck["student"])
     opt.load_state_dict(ck["opt"])
     step, start_epoch, best = ck["step"], ck["epoch"], ck["best"]
-    print(f"resumed from epoch {start_epoch} step {step}", flush=True)
+    best_knn, bad = ck.get("best_knn", 0.0), ck.get("bad", 0)
+    print(f"resumed from epoch {start_epoch} step {step} (best knn {best_knn:.4f}, stop-counter {bad})", flush=True)
 
 try:  # live metrics for the mission page
     from prometheus_client import Gauge, start_http_server
 
     start_http_server(cfg["metrics_port"])
-    G = {k: Gauge(k, k) for k in ["loss", "loss_cls", "loss_patch", "lr", "grad_norm", "img_per_sec", "step_time", "data_wait"]}
+    G = {k: Gauge(k, k) for k in ["loss", "loss_cls", "loss_patch", "lr", "grad_norm", "img_per_sec", "step_time", "data_wait", "knn_bad"]}
 except ImportError:
     G = None
 
@@ -89,7 +95,8 @@ if knn_every:
 
 
 def save(path, epoch):
-    torch.save({"student": student.state_dict(), "opt": opt.state_dict(), "step": step, "epoch": epoch, "best": best}, path)
+    torch.save({"student": student.state_dict(), "opt": opt.state_dict(), "step": step, "epoch": epoch,
+                "best": best, "best_knn": best_knn, "bad": bad}, path)
 
 
 for epoch in range(start_epoch, cfg["epochs"]):
@@ -128,15 +135,30 @@ for epoch in range(start_epoch, cfg["epochs"]):
                     G[k].set(v)
     avg = ep_loss / max(ep_n, 1)
     print(f"=== epoch {epoch} done avg_loss {avg:.4f}", flush=True)
+    acc = None
     if knn_every and (epoch + 1) % knn_every == 0:  # no dropout/BN in the student, so no eval() toggle
         acc = knn_eval(student_fn(student), cifar, 224)
         print(f"=== epoch {epoch} knn top1 {acc:.4f}", flush=True)
         if KNN:
             KNN.set(acc)
+    # early stopping: only stop once BOTH the epoch loss and the k-NN have stalled for `stop_patience` evals
+    loss_imp = avg < best - stop_delta_loss
+    knn_imp = acc is not None and acc > best_knn + stop_delta_knn
     if avg < best:
         best = avg
         save(os.path.join(cfg["ckpt_dir"], "best.pt"), epoch + 1)
+    if acc is not None and acc > best_knn:
+        best_knn = acc
+        save(os.path.join(cfg["ckpt_dir"], "best_knn.pt"), epoch + 1)
+    bad = 0 if (loss_imp or knn_imp) else bad + 1
+    if G:
+        G["knn_bad"].set(bad)
     if (epoch + 1) % cfg["ckpt_every_epochs"] == 0:
         save(os.path.join(cfg["ckpt_dir"], f"epoch{epoch + 1}.pt"), epoch + 1)
     save(last, epoch + 1)
+    if stop_patience:
+        print(f"=== epoch {epoch} stop-counter {bad}/{stop_patience} (best loss {best:.4f}, best knn {best_knn:.4f})", flush=True)
+        if bad >= stop_patience and (epoch + 1) >= stop_min_epoch:
+            print(f"EARLY STOP at epoch {epoch + 1}: no kNN/loss improvement for {bad} epochs", flush=True)
+            break
 print("TRAINING DONE", flush=True)
