@@ -135,6 +135,14 @@ for epoch in range(start_epoch, cfg["epochs"]):
                     G[k].set(v)
     avg = ep_loss / max(ep_n, 1)
     print(f"=== epoch {epoch} done avg_loss {avg:.4f}", flush=True)
+    try:  # peak VRAM high-water mark since process start (includes compile graphs)
+        print(
+            f"=== epoch {epoch} vram_peak {torch.cuda.max_memory_allocated() / 2**30:.2f}G "
+            f"reserved {torch.cuda.max_memory_reserved() / 2**30:.2f}G",
+            flush=True,
+        )
+    except Exception:
+        pass
     acc = None
     if knn_every and (epoch + 1) % knn_every == 0:  # no dropout/BN in the student, so no eval() toggle
         acc = knn_eval(student_fn(student), cifar, 224)
