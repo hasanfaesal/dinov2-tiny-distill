@@ -21,6 +21,20 @@ nvidia-smi -L | head -1 || true
 df -h /home/dev | tail -1
 git pull -q || say "WARN: git pull failed, using current revision"
 
+# HTTP transport (curl preferred; wget/python3 fallbacks) used by every download below
+cat > "$STATE/dl.sh" <<'X'
+#!/bin/sh
+url=$1; out=$2; t=${3:-900}
+if command -v curl >/dev/null 2>&1; then
+  exec curl -fSsS --connect-timeout 10 --retry 6 --retry-delay 3 -m "$t" -o "$out" "$url"
+elif command -v wget >/dev/null 2>&1; then
+  exec wget -q -T 30 -t 6 -O "$out" "$url"
+else
+  exec python3 -c 'import sys, urllib.request; urllib.request.urlretrieve(sys.argv[1], sys.argv[2])' "$url" "$out"
+fi
+X
+chmod +x "$STATE/dl.sh"
+
 [ -f "$MAN/manifest.sizes" ] || { say "FATAL: manifest.sizes missing"; exit 10; }
 [ -f "$MAN/manifest.sha256" ] || { say "FATAL: manifest.sha256 missing"; exit 10; }
 
@@ -32,14 +46,14 @@ for chunk in images2 images3 images4 images5 images6; do
   need=$((need + b))
 done
 need_gb=$(( need / 1000000000 + 3 ))
-avail_gb=$(df -BG --output=avail /home/dev | tail -1 | tr -dc '0-9')
+avail_gb=$(df -BG /home/dev | tail -1 | awk '{print $4}' | tr -dc '0-9')
 say "staging: need ~${need_gb}G, have ${avail_gb}G free"
 [ "$avail_gb" -ge "$need_gb" ] || { say "FATAL: not enough disk"; exit 11; }
 
 mesh_srv() {
   local c
   for c in "dinov2-fetch-cpu.givemeanode.internal:8099" "100.64.0.1:8099"; do
-    curl -fsS -m 8 "http://$c/health.txt" >/dev/null 2>&1 && { echo "$c"; return 0; }
+    sh "$STATE/dl.sh" "http://$c/health.txt" /dev/null 10 2>/dev/null && { echo "$c"; return 0; }
   done
   return 1
 }
@@ -66,7 +80,7 @@ pull_mesh() {
   n=$(wc -l < "$STATE/todo_$chunk.txt")
   [ "$n" -eq 0 ] && return 0
   say "$chunk: mesh pull $n file(s) from $srv"
-  xargs -a "$STATE/todo_$chunk.txt" -P 12 -I{} curl -fSsS --connect-timeout 10 --retry 6 --retry-delay 3 -m 900 -o "$DATA/{}" "http://$srv/{}" || true
+  xargs -a "$STATE/todo_$chunk.txt" -P 12 -I{} sh "$STATE/dl.sh" "http://$srv/{}" "$DATA/{}" 900 || true
   verify_chunk "$chunk"
 }
 
@@ -83,7 +97,7 @@ pull_exports() {
   while IFS=$'\t' read -r bid cc url; do
     [ -n "$bid" ] || continue
     say "$chunk: export bundle $bid"
-    curl -fSsS --connect-timeout 15 --retry 6 --retry-delay 5 -m 3600 -o "$tmp/$bid.tar" "$url" || { rm -rf "$tmp"; return 1; }
+    sh "$STATE/dl.sh" "$url" "$tmp/$bid.tar" 3600 || { rm -rf "$tmp"; return 1; }
     tar -xf "$tmp/$bid.tar" -C "$tmp" || { rm -rf "$tmp"; return 1; }
     rm -f "$tmp/$bid.tar"
   done <<< "$rows"
@@ -157,5 +171,11 @@ say "training complete; post eval"
 python -u src/evaluate_knn.py /home/dev/checkpoints_full/best_knn.pt /home/dev/checkpoints_full/best.pt /home/dev/checkpoints_full/last.pt 2>&1 | tee -a /home/dev/logs/train_full.log || say "WARN: post eval failed"
 sleep 3
 say "self-stop (billing ends now; disk parks intact)"
-curl -sS -m 15 -X POST -H 'Metadata-Flavor: givemeanode' http://169.254.42.1/v1/stop || say "WARN: self-stop failed"
+if command -v curl >/dev/null 2>&1; then
+  curl -sS -m 15 -X POST -H 'Metadata-Flavor: givemeanode' http://169.254.42.1/v1/stop
+elif command -v wget >/dev/null 2>&1; then
+  wget -q -T 15 -O /dev/null --header='Metadata-Flavor: givemeanode' --post-data='' http://169.254.42.1/v1/stop
+else
+  python3 -c 'import urllib.request; r=urllib.request.Request("http://169.254.42.1/v1/stop", method="POST", headers={"Metadata-Flavor": "givemeanode"}); urllib.request.urlopen(r, timeout=15).read()'
+fi || say "WARN: self-stop failed"
 say "ALL DONE"
