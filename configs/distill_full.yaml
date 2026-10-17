@@ -1,4 +1,4 @@
-# Full DataComp-12M fetch (~7.3M images across images, images2..4). ~117M exposures ~ 8h at ~4k img/s.
+# Full DataComp fetch: dirs images..images6 (~7.2M images, ~164 GB). ~115M exposures, ~9-10h at ~3.7k img/s.
 data_glob: /home/dev/data/images*/*.tar
 batch_size: 256          # images per step -> 512 views (2 global views each)
 num_workers: 24
@@ -9,7 +9,7 @@ weight_decay: 0.05
 grad_clip: 3.0
 patch_weight: 1.0
 ckpt_dir: /home/dev/checkpoints_full
-ckpt_every_epochs: 2
+ckpt_every_epochs: 3
 knn_every: 1
 log_every: 50
 metrics_port: 9100
