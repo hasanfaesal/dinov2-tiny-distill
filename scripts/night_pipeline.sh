@@ -40,7 +40,7 @@ chmod +x "$STATE/dl.sh"
 
 # ---- staging -------------------------------------------------------------
 need=0
-for chunk in images2 images3 images4 images5 images6; do
+for chunk in images images2 images3 images4 images5 images6; do
   [ -f "$STATE/staged_$chunk" ] && continue
   b=$(awk -v c="$chunk/" '$2 ~ "^"c {s+=$1} END{print s+0}' "$MAN/manifest.sizes")
   need=$((need + b))
@@ -107,7 +107,7 @@ pull_exports() {
 }
 
 stage_start=$(date +%s)
-for chunk in images2 images3 images4 images5 images6; do
+for chunk in images images2 images3 images4 images5 images6; do
   if [ -f "$STATE/staged_$chunk" ]; then say "$chunk: staged (marker)"; continue; fi
   mkdir -p "$DATA/$chunk"
   ok=0
