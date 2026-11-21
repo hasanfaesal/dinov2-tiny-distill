@@ -1,29 +1,48 @@
 """k-NN (k=20, cosine, temperature-weighted vote) on CIFAR-100 from backbone CLS features.
-Usage: evaluate_knn.py CKPT [CKPT...]   |   evaluate_knn.py --teacher"""
+
+Usage:
+  python src/evaluate_knn.py CKPT [CKPT...] [--cifar-root data/cifar100]
+  python src/evaluate_knn.py --teacher [--cifar-root data/cifar100]
+"""
+import argparse
 import io
 import os
 import sys
 
 import numpy as np
-import pyarrow.parquet as pq
 import torch
 import torch.nn.functional as F
 from PIL import Image
+from torchvision.datasets import CIFAR100
 
 sys.path.insert(0, os.path.dirname(__file__))
 from dataset import normalize
 
 
-def load_cifar(root="/home/dev/data/cifar100_hf/cifar100"):
-    """HF mirror (uoft-cs/cifar100; the toronto host is ~100 KB/s from the node). Cached as uint8 tensors."""
-    cache = f"{root}/cifar100_uint8.pt"
+def load_cifar(root=None):
+    """Load CIFAR-100 as cached uint8 tensors; falls back to torchvision download."""
+    root = root or os.environ.get("CIFAR_ROOT", "data/cifar100")
+    os.makedirs(root, exist_ok=True)
+    cache = os.path.join(root, "cifar100_uint8.pt")
     if os.path.exists(cache):
-        return torch.load(cache)
-    out = []
-    for split in ("train", "test"):
-        t = pq.read_table(f"{root}/{split}-00000-of-00001.parquet").to_pydict()
-        x = np.stack([np.asarray(Image.open(io.BytesIO(d["bytes"])).convert("RGB")) for d in t["img"]])
-        out.append((torch.from_numpy(x).permute(0, 3, 1, 2).contiguous(), torch.tensor(t["fine_label"])))
+        return torch.load(cache, weights_only=True)
+
+    train_pq = os.path.join(root, "train-00000-of-00001.parquet")
+    if os.path.exists(train_pq):
+        import pyarrow.parquet as pq
+
+        out = []
+        for split in ("train", "test"):
+            t = pq.read_table(os.path.join(root, f"{split}-00000-of-00001.parquet")).to_pydict()
+            x = np.stack([np.asarray(Image.open(io.BytesIO(d["bytes"])).convert("RGB")) for d in t["img"]])
+            out.append((torch.from_numpy(x).permute(0, 3, 1, 2).contiguous(), torch.tensor(t["fine_label"])))
+    else:
+        out = []
+        for is_train in (True, False):
+            ds = CIFAR100(root=root, train=is_train, download=True)
+            x = torch.from_numpy(ds.data).permute(0, 3, 1, 2).contiguous()
+            out.append((x, torch.tensor(ds.targets, dtype=torch.long)))
+
     torch.save(out, cache)
     return out
 
@@ -68,12 +87,17 @@ def teacher_fn(teacher):
 if __name__ == "__main__":
     from models import Student, make_teacher
 
-    cifar = load_cifar()
-    if sys.argv[1] == "--teacher":
-        print("teacher knn top1", knn_eval(teacher_fn(make_teacher().cuda()), cifar, 196))
-    for path in sys.argv[1:]:
-        if path == "--teacher":
-            continue
+    ap = argparse.ArgumentParser(description="Evaluate CIFAR-100 k-NN (k=20) accuracy.")
+    ap.add_argument("checkpoints", nargs="*", help="Student checkpoint (.pt) paths")
+    ap.add_argument("--teacher", action="store_true", help="Evaluate frozen DINOv2 teacher")
+    ap.add_argument("--cifar-root", default=None, help="CIFAR-100 cache/download directory")
+    args = ap.parse_args()
+
+    cifar = load_cifar(args.cifar_root)
+    if args.teacher:
+        print(f"teacher knn top1 {knn_eval(teacher_fn(make_teacher().cuda()), cifar, 196):.4f}")
+    for path in args.checkpoints:
         s = Student().cuda().eval()
-        s.load_state_dict(torch.load(path, map_location="cuda")["student"])
-        print(path, "knn top1", knn_eval(student_fn(s), cifar, 224))
+        ck = torch.load(path, map_location="cuda", weights_only=True)
+        s.load_state_dict(ck["student"] if "student" in ck else ck)
+        print(f"{path} knn top1 {knn_eval(student_fn(s), cifar, 224):.4f}")

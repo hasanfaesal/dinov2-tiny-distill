@@ -1,20 +1,18 @@
-# Full DataComp fetch: dirs images..images6 (~7.2M images, ~164 GB). Up to 30 epochs
-# (~200M exposures, ~17h at ~3.7k img/s); early stop from epoch 26 once BOTH k-NN and
-# epoch loss have stalled for 4 evals. ~115M exposures by epoch 16.
-data_glob: /home/dev/data/images*/*.tar
+# Run 2 (5.94M DataComp-12M images, 30 epochs, early-stop floor at epoch 26).
+data_glob: data/images*/*.tar
 batch_size: 256          # images per step -> 512 views (2 global views each)
 num_workers: 24
-epochs: 30               # hard cap; expected stop 26-28
+epochs: 30               # hard cap
 stop_patience: 4         # consecutive evals with no meaningful kNN/loss gain -> stop
 stop_min_epoch: 26       # never stop before the cosine tail has annealed
 stop_delta_knn: 0.002    # +0.2 top-1 points counts as improvement
 stop_delta_loss: 0.002   # absolute on epoch-avg loss
-warmup_epochs: 1         # ~7M samples, close to the baseline's 5 x 1.2M
+warmup_epochs: 1         # ~5.9M samples, matching Run 1's 5 x 1.2M warmup
 lr: 1.0e-3
 weight_decay: 0.05
 grad_clip: 3.0
 patch_weight: 1.0
-ckpt_dir: /home/dev/checkpoints_full
+ckpt_dir: checkpoints/run2
 ckpt_every_epochs: 3
 knn_every: 1
 log_every: 50
