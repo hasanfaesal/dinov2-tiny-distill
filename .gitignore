@@ -1,5 +1,19 @@
-# Markdown files (temporary exclusion per instructions)
-*.md
+# Private working notes & local artifacts
+AGENTS.md
+AUTORESEARCH_H100_GUIDE.md
+plan.md
+options.md
+thoughts.md
+artifacts/
+reports/
+hf/
+
+# Local scratch / ad-hoc analysis scripts
+scripts/colab_*
+scripts/dashboard_sync.py
+scripts/plot_run1.py
+scripts/render_individual_attentions.py
+scripts/run2_attn_analysis.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -12,10 +26,12 @@ __pycache__/
 *.bin
 *.safetensors
 checkpoints/
+checkpoints_full/
 
 # Datasets and cache
 data/
 *.tar
+*.tar.gz
 .cache/
 wandb/
 
